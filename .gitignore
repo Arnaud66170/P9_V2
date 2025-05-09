@@ -1,0 +1,19 @@
+# Environnements virtuels
+venv_P9_V2/
+__pycache__/
+.ipynb_checkpoints/
+
+# Données volumineuses
+data/
+models/
+models_from_P7/
+results/
+
+# Fichiers temporaires / logs
+*.log
+*.csv
+*.tmp
+.DS_Store
+
+# Jupyter outputs
+*.ipynb_checkpoints
