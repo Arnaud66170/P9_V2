@@ -31,7 +31,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          # coverage run -m pytest
+          coverage run -m pytest
           coverage report
 
 # lancement des tests :
