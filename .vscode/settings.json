@@ -1,0 +1,6 @@
+{
+    "git.ignoreLimitWarning": true,
+    "diffEditor.codeLens": false,
+    "mergeEditor.enabled": false,
+    "git.mergeEditor": false
+}

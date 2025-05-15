@@ -1,0 +1,39 @@
+__pycache__/
+.env
+
+*.pyc
+*.pkl
+*.safetensors
+*.bin
+
+
+# Données volumineuses
+data/
+models/
+models_from_P7/
+results/
+mlruns/
+notebooks/mlruns/
+notebooks/models/
+huggingface_api/
+huggingface_space/
+htmlcov/
+clean-P9/
+venv_P9_V2/
+
+
+# Fichiers temporaires / logs
+*.log
+*.csv
+*.tmp
+.DS_Store
+tmp_albert/
+tmp_electra/
+.coverage
+.coveragerc
+
+
+# Jupyter outputs
+*.ipynb_checkpoints
+upload_electra_model.py
+
