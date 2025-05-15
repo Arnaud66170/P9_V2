@@ -25,3 +25,4 @@ tqdm==4.66.4
 
 accelerate==1.6.0
 coverage>=7.2.0
+datasets>=2.18.0
