@@ -145,27 +145,21 @@ def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -
         probs = torch.sigmoid(torch.tensor(logits)).numpy()
         preds = (probs > THRESHOLD).astype(int)
 
-        def safe_metric(fn, *args, **kwargs):
-            try:
-                return round(float(fn(*args, **kwargs)), 4)
-            except:
-                return None
-
         metrics = {
-            "f1_micro": safe_metric(f1_score, labels, preds, average="micro"),
-            "f1_macro": safe_metric(f1_score, labels, preds, average="macro"),
-            "f1_weighted": safe_metric(f1_score, labels, preds, average="weighted"),
-            "accuracy": safe_metric(accuracy_score, labels, preds),
-            "hamming_loss": safe_metric(hamming_loss, labels, preds),
-            "log_loss": safe_metric(log_loss, labels, probs),
-            "roc_auc_micro": safe_metric(roc_auc_score, labels, probs, average="micro"),
-            "roc_auc_macro": safe_metric(roc_auc_score, labels, probs, average="macro"),
-            "pr_auc_macro": safe_metric(average_precision_score, labels, probs, average="macro"),
-            "coverage_error": safe_metric(coverage_error, labels, probs),
-            "lrap": safe_metric(label_ranking_average_precision_score, labels, probs)
+            "f1_micro": f1_score(labels, preds, average="micro"),
+            "f1_macro": f1_score(labels, preds, average="macro"),
+            "f1_weighted": f1_score(labels, preds, average="weighted"),
+            "accuracy": accuracy_score(labels, preds),
+            "hamming_loss": hamming_loss(labels, preds),
+            "log_loss": log_loss(labels, probs),
+            "roc_auc_micro": roc_auc_score(labels, probs, average="micro"),
+            "roc_auc_macro": roc_auc_score(labels, probs, average="macro"),
+            "pr_auc_macro": average_precision_score(labels, probs, average="macro"),
+            "coverage_error": coverage_error(labels, probs),
+            "lrap": label_ranking_average_precision_score(labels, probs)
         }
 
-        return {k: v for k, v in metrics.items() if v is not None}
+        return {k: round(float(v), 4) for k, v in metrics.items()}
 
     with mlflow.start_run(run_name="goemotions_electra_test" if test_mode else "goemotions_electra_optimized"):
         trainer = CustomTrainer(
@@ -192,31 +186,12 @@ def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -
         mlflow.log_metrics(eval_results)
         for i, (emo, w) in enumerate(zip(emotion_cols, class_weights)):
             mlflow.log_metric(f"class_weight_{emo}", float(w))
-
+        
         # === Sauvegarde manuelle des métriques enrichies ===
         metrics_export_path = os.path.abspath(os.path.join(model_dir, "metrics_full.csv"))
         metrics_df = pd.DataFrame([eval_results])
         metrics_df.to_csv(metrics_export_path, index=False, encoding="utf-8")
         print(f"📁 Fichier des métriques sauvegardé : {metrics_export_path}")
-
-        # === Historique cumulatif des métriques ===
-        history_path = os.path.abspath(os.path.join(model_dir, "metrics_history.csv"))
-
-        # Ajout de colonnes utiles au suivi
-        run_id = mlflow.active_run().info.run_id
-        eval_results["run_id"] = run_id
-        eval_results["timestamp"] = pd.Timestamp.now().isoformat(timespec='seconds')
-
-        new_row_df = pd.DataFrame([eval_results])
-
-        if os.path.exists(history_path):
-            old_df = pd.read_csv(history_path)
-            combined_df = pd.concat([old_df, new_row_df], ignore_index=True)
-        else:
-            combined_df = new_row_df
-
-        combined_df.to_csv(history_path, index=False, encoding="utf-8")
-        print(f"📁 Historique mis à jour : {history_path}")
 
     return model, tokenizer, eval_results
 

@@ -183,7 +183,7 @@ def download_emotion_stats():
     return EXPORT_CSV_PATH if os.path.exists(EXPORT_CSV_PATH) else None
 
 with gr.Blocks() as demo:
-    gr.Markdown("<h1 style='text-align:center;'>Analyse multi-label avec ELECTRA fine-tuné</h1>")
+    gr.Markdown("## 😶‍🌫️ Analyse multi-label avec ELECTRA fine-tuné")
 
     with gr.Tabs():
         with gr.Tab("🔍 Analyse des émotions"):
@@ -222,7 +222,7 @@ with gr.Blocks() as demo:
     gen_button.click(fn=download_emotion_stats, outputs=download_btn)
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(title="Dashboard Émotions – P9_V2")
 
 # # Lancement de l'interface
 # 

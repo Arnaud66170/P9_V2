@@ -13,26 +13,22 @@ from transformers import (
     EarlyStoppingCallback,
     set_seed
 )
-from sklearn.metrics import (
-    f1_score, accuracy_score, hamming_loss, roc_auc_score,
-    average_precision_score, log_loss, coverage_error,
-    label_ranking_average_precision_score
-)
+from sklearn.metrics import f1_score, accuracy_score
 import mlflow
 import joblib
 import torch
 from torch.nn import BCEWithLogitsLoss
-from transformers.trainer_callback import PrinterCallback
 
-# ======== CONFIGURATION ========
-THRESHOLD = 0.25
-OVERSAMPLING_THRESHOLD = 150  # Nombre minimal d'occurrences par classe
-
-# GPU check
+# Vérification GPU obligatoire
 if not torch.cuda.is_available():
     raise SystemError("CUDA non disponible : vérifie ton driver et PyTorch GPU.")
 
-# ======== CUSTOM TRAINER ========
+from transformers.trainer_callback import PrinterCallback
+
+# ======== CONFIGURATION ========
+THRESHOLD = 0.25  # 🔧 Seuil de prédiction ajustable
+
+# Trainer personnalisé avec gestion des poids
 class CustomTrainer(Trainer):
     def __init__(self, class_weights_tensor, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -45,7 +41,6 @@ class CustomTrainer(Trainer):
         loss = loss_fct(outputs.logits, labels)
         return (loss, outputs) if return_outputs else loss
 
-# ======== PIPELINE FUNCTION ========
 def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -> Tuple:
     set_seed(70)
 
@@ -61,7 +56,7 @@ def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -
     if test_mode:
         df = df.sample(n=500, random_state=70)
     else:
-        df = df.sample(n=50000, random_state=70)
+        df = df.sample(n=50000, random_state=70)  # ✅ Réduction à 50k
 
     emotion_cols = [
         'admiration', 'amusement', 'anger', 'annoyance', 'approval', 'caring',
@@ -70,17 +65,6 @@ def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -
         'joy', 'love', 'nervousness', 'optimism', 'pride', 'realization', 'relief',
         'remorse', 'sadness', 'surprise', 'neutral'
     ]
-
-    # ✅ Suréchantillonnage des émotions rares
-    if not test_mode:
-        for col in emotion_cols:
-            count = df[col].sum()
-            if count < OVERSAMPLING_THRESHOLD:
-                deficit = int(OVERSAMPLING_THRESHOLD - count)
-                rare_rows = df[df[col] == 1]
-                if not rare_rows.empty:
-                    df = pd.concat([df, rare_rows.sample(n=deficit, replace=True, random_state=70)], ignore_index=True)
-
     df['labels'] = df[emotion_cols].apply(lambda row: [i for i, v in enumerate(row) if v == 1], axis=1)
     y = df[emotion_cols].values.astype(np.float32).tolist()
 
@@ -117,7 +101,7 @@ def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -
     checkpoint_dirs = sorted(checkpoint_dirs, key=lambda x: int(x.split("-")[1])) if checkpoint_dirs else []
     resume_checkpoint = os.path.join(model_dir, checkpoint_dirs[-1]) if checkpoint_dirs and not force_retrain else None
 
-    num_epochs = 1 if test_mode else 5
+    num_epochs = 1 if test_mode else 5  # ✅ Réduction à 5 epochs
     report = "none" if test_mode else "tensorboard"
 
     training_args = TrainingArguments(
@@ -137,35 +121,17 @@ def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -
         logging_steps=100,
         save_total_limit=2,
         report_to=report,
-        fp16=True
+        fp16=True  # ✅ Accélération GPU
     )
 
     def compute_metrics(eval_pred):
         logits, labels = eval_pred
-        probs = torch.sigmoid(torch.tensor(logits)).numpy()
-        preds = (probs > THRESHOLD).astype(int)
-
-        def safe_metric(fn, *args, **kwargs):
-            try:
-                return round(float(fn(*args, **kwargs)), 4)
-            except:
-                return None
-
-        metrics = {
-            "f1_micro": safe_metric(f1_score, labels, preds, average="micro"),
-            "f1_macro": safe_metric(f1_score, labels, preds, average="macro"),
-            "f1_weighted": safe_metric(f1_score, labels, preds, average="weighted"),
-            "accuracy": safe_metric(accuracy_score, labels, preds),
-            "hamming_loss": safe_metric(hamming_loss, labels, preds),
-            "log_loss": safe_metric(log_loss, labels, probs),
-            "roc_auc_micro": safe_metric(roc_auc_score, labels, probs, average="micro"),
-            "roc_auc_macro": safe_metric(roc_auc_score, labels, probs, average="macro"),
-            "pr_auc_macro": safe_metric(average_precision_score, labels, probs, average="macro"),
-            "coverage_error": safe_metric(coverage_error, labels, probs),
-            "lrap": safe_metric(label_ranking_average_precision_score, labels, probs)
+        probs = torch.sigmoid(torch.tensor(logits))
+        preds = (probs > THRESHOLD).int().numpy()
+        return {
+            "f1": f1_score(labels, preds, average="micro"),
+            "accuracy": accuracy_score(labels, preds)
         }
-
-        return {k: v for k, v in metrics.items() if v is not None}
 
     with mlflow.start_run(run_name="goemotions_electra_test" if test_mode else "goemotions_electra_optimized"):
         trainer = CustomTrainer(
@@ -179,47 +145,21 @@ def run_emotion_pipeline(force_retrain: bool = False, test_mode: bool = False) -
             class_weights_tensor=class_weights_tensor
         )
 
-        trainer.remove_callback(PrinterCallback)
+        trainer.remove_callback(PrinterCallback)  # ✅ Nettoyage logs
+
         trainer.train(resume_from_checkpoint=resume_checkpoint if not test_mode else None)
 
         model.save_pretrained(model_path)
         tokenizer.save_pretrained(tokenizer_path)
 
         eval_results = trainer.evaluate()
-        joblib.dump(eval_results, metrics_path)
+        metrics = {
+            "f1": eval_results.get("eval_f1", 0.0),
+            "accuracy": eval_results.get("eval_accuracy", 0.0)
+        }
+        joblib.dump(metrics, metrics_path)
 
         mlflow.log_params(training_args.to_dict())
-        mlflow.log_metrics(eval_results)
-        for i, (emo, w) in enumerate(zip(emotion_cols, class_weights)):
-            mlflow.log_metric(f"class_weight_{emo}", float(w))
+        mlflow.log_metrics(metrics)
 
-        # === Sauvegarde manuelle des métriques enrichies ===
-        metrics_export_path = os.path.abspath(os.path.join(model_dir, "metrics_full.csv"))
-        metrics_df = pd.DataFrame([eval_results])
-        metrics_df.to_csv(metrics_export_path, index=False, encoding="utf-8")
-        print(f"📁 Fichier des métriques sauvegardé : {metrics_export_path}")
-
-        # === Historique cumulatif des métriques ===
-        history_path = os.path.abspath(os.path.join(model_dir, "metrics_history.csv"))
-
-        # Ajout de colonnes utiles au suivi
-        run_id = mlflow.active_run().info.run_id
-        eval_results["run_id"] = run_id
-        eval_results["timestamp"] = pd.Timestamp.now().isoformat(timespec='seconds')
-
-        new_row_df = pd.DataFrame([eval_results])
-
-        if os.path.exists(history_path):
-            old_df = pd.read_csv(history_path)
-            combined_df = pd.concat([old_df, new_row_df], ignore_index=True)
-        else:
-            combined_df = new_row_df
-
-        combined_df.to_csv(history_path, index=False, encoding="utf-8")
-        print(f"📁 Historique mis à jour : {history_path}")
-
-    return model, tokenizer, eval_results
-
-# Lecture du fichier indépendemment de mlflow avec :
-# df_metrics = pd.read_csv("../models/emotions/metrics_full.csv")
-# display(df_metrics.T.rename(columns={0: "ELECTRA multi-label"}))
+    return model, tokenizer, metrics

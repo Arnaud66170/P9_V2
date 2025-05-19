@@ -183,7 +183,7 @@ def download_emotion_stats():
     return EXPORT_CSV_PATH if os.path.exists(EXPORT_CSV_PATH) else None
 
 with gr.Blocks() as demo:
-    gr.Markdown("<h1 style='text-align:center;'>Analyse multi-label avec ELECTRA fine-tuné</h1>")
+    gr.Markdown("## 😶‍🌫️ Analyse multi-label avec ELECTRA fine-tuné")
 
     with gr.Tabs():
         with gr.Tab("🔍 Analyse des émotions"):
