@@ -188,7 +188,7 @@ def generate_emotion_summary():
     summary = df['emotion'].value_counts().reset_index()
     summary.columns = ["Émotion détectée", "Nombre de tweets"]
     os.makedirs(os.path.dirname(EXPORT_XLSX_PATH), exist_ok=True)
-    summary.to_excel(EXPORT_XLSX_PATH, index=False)
+    summary.to_excel(EXPORT_XLSX_PATH, index=False, encoding="utf-8")
     return EXPORT_XLSX_PATH
 
 def download_emotion_stats():
