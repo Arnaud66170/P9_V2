@@ -2,8 +2,6 @@
 
 import os
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
-import numpy as np
 from sklearn.metrics import (
     confusion_matrix, ConfusionMatrixDisplay,
     roc_curve, auc, precision_recall_curve
@@ -122,32 +120,3 @@ def plot_pr_curves(y_true, y_probs, class_names, max_classes=6):
     plt.grid()
     plt.tight_layout()
     plt.show()
-
-
-def top_k_auc_emotions(y_true, y_probs, class_names, k=6, worst=False):
-    """
-    Retourne les k émotions avec les meilleurs ou pires AUC.
-
-    Args:
-        y_true (ndarray): array de shape (n_samples, n_classes)
-        y_probs (ndarray): array de probabilités de shape identique
-        class_names (list): noms des classes
-        k (int): nombre de classes à retourner
-        worst (bool): True → retourne les pires AUC, False → les meilleures
-
-    Returns:
-        List[str]: noms des émotions triées par AUC
-    """
-    aucs = []
-    for i in range(len(class_names)):
-        try:
-            auc_score = roc_auc_score(y_true[:, i], y_probs[:, i])
-        except:
-            auc_score = np.nan
-        aucs.append((class_names[i], auc_score))
-
-    # Filtrer NaN et trier
-    aucs = [(cls, score) for cls, score in aucs if not np.isnan(score)]
-    aucs_sorted = sorted(aucs, key=lambda x: x[1], reverse=not worst)
-
-    return [cls for cls, _ in aucs_sorted[:k]]
